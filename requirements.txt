@@ -1,0 +1,4 @@
+# All the requirements for the project are listed here
+
+opencv-python
+numpy
