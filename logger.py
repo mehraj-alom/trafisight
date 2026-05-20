@@ -56,3 +56,4 @@ def create_module_logger(name):
 # Module loggers
 
 main_logger = create_module_logger("main")
+inference_logger = create_module_logger("inference")

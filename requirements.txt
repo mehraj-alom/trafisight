@@ -2,3 +2,8 @@
 
 opencv-python
 numpy
+dotenv
+onnxruntime
+torch
+torchvision[cpu]
+supervision
