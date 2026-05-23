@@ -27,11 +27,12 @@ def postprocess_detections(
     raw_output: np.ndarray,
     frame_shape,
     model_input_shape,
-    conf_threshold: float = 0.60,
-    iou_threshold: float = 0.45,
+    conf_threshold: float = 0.40,
+    iou_threshold: float = 0.45
 ):
     """Postprocess model output to extract detections.
     Args:
+    
         raw_output: raw output from model inference.
         frame_shape: original frame shape (H,W,C).
         model_input_shape: model input shape (N,C,H,W).

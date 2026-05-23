@@ -15,6 +15,7 @@ from detection.detector import Detector
 
 from pipeline.visuslizer import (draw_detections,
                                  )
+from tracking.tracker import Tracker
 
 
 def run_pipeline(
@@ -79,9 +80,10 @@ def run_pipeline(
             frame_to_save = frame.copy()
 
             if i % 4 == 0:
-                latest_detections = detector.detect_vehicle(frame)
-                processed_frames += 1
-
+                raw_detections = detector.detect_vehicle(frame)
+                i += 1      
+                tracker = Tracker()      
+                latest_detections = tracker.update(raw_detections)
             draw_detections(frame_to_save, latest_detections, single_color=draw_single_color, color_map=draw_color_map)
 
             cv2.putText(
@@ -94,8 +96,18 @@ def run_pipeline(
                 2,
                 cv2.LINE_AA,
             )
+            cv2.putText(
+            frame_to_save,
+            f"FPS: {fps:.2f}",
+            (12, 60),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (0, 255, 0),
+            2,
+            )
             writer.write(frame_to_save)
             saved_frames += 1
+            processed_frames += 1
     finally:
         if writer is not None:
             writer.release()
