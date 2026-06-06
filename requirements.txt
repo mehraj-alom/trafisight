@@ -7,3 +7,4 @@ onnxruntime
 torch
 torchvision[cpu]
 supervision
+easyocr

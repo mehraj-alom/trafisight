@@ -4,7 +4,12 @@ import supervision as sv
 
 def convert_to_sv_detections(detections):
     """
-    Convert custom detections to supervision detections.
+    Convert a list of detection dictionaries to a supervision Detections object.
+     Each detection dictionary should have the following keys:
+        - "box": A list or tuple of [x, y, width, height]
+        - "score": A float representing the confidence score of the detection
+        - "class_id": An integer representing the class ID of the detected object  
+    
     """
 
     if not detections:
