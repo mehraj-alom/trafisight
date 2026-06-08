@@ -26,7 +26,7 @@ from mock_db.mock_db import MockDB
 
 mock_db = MockDB()
 
-DETECTION_INTERVAL = 2
+DETECTION_INTERVAL = 4
 
 
 def run_pipeline(
@@ -97,7 +97,8 @@ def run_pipeline(
     prev_time = time.time()
 
     def process_track(frame, track_row, frame_index):
-
+        print("TRACK_ROW =", track_row)
+        raise SystemExit
         track_id = track_row["track_id"]
         vehicle_box = track_row["bbox_xyxy"]
 
@@ -166,6 +167,15 @@ def run_pipeline(
         if plate_crop is None:
             return
 
+        print(
+            "Plate crop shape:",
+            plate_crop.shape
+        )
+        
+        h, w = plate_crop.shape[:2]
+        if h < 25 or w < 60:
+            return            ## too small to be a plate, skip OCR
+        
         try:
             print(f"Running OCR for track {track_id}") # debugg 
             debug = vehicle_crop.copy()
@@ -186,6 +196,14 @@ def run_pipeline(
                 f"{GlobalConfig.LOCAL_DEBUG_PATH}/track_{track_id}.jpg",
                 debug
             )
+            plate_crop = cv2.resize(
+            plate_crop,
+            None,
+            fx=4,
+            fy=4,
+            interpolation=cv2.INTER_CUBIC
+            )
+
             ocr_text, ocr_confidence = (
                 ocr_engine.recognize(
                     plate_crop
@@ -229,7 +247,7 @@ def run_pipeline(
                 f"{ocr_text} "
                 f"({ocr_confidence:.2f})",
             )
-
+               ###########  Procrss tracj ends here
     try:
 
         for frame_index, frame in enumerate(
@@ -403,7 +421,7 @@ def run_pipeline(
 
 
 def main():
-    video_path = "local2.mp4"
+    video_path = "video_ind.mp4"
     run_pipeline(
         source_type="video",
         source=video_path,

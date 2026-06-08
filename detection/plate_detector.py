@@ -109,7 +109,12 @@ class PlateDetector:
             if x2 <= x1 or y2 <= y1:
                 continue
 
-            boxes.append((x1, y1, x2, y2))
+            boxes.append([
+                x1,
+                y1,
+                x2 - x1,
+                y2 - y1
+            ])
             scores.append(confidence)
 
         if not boxes:
@@ -141,11 +146,17 @@ class PlateDetector:
                 frame_shape
             )
 
+            x, y, w, h = boxes[idx]
+
             detections.append(
                 PlateDetection(
-                    bbox_xyxy=tuple(boxes[idx]),
+                    bbox_xyxy=(
+                        x,
+                        y,
+                        x + w,
+                        y + h,
+                    ),
                     confidence=float(scores[idx]),
                 )
             )
-
         return detections
