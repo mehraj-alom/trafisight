@@ -2,12 +2,12 @@
 from pathlib import Path
 from datetime import datetime
 import time
-
 import cv2
 
 from config.global_config import GlobalConfig
 from detection.detector import Detector
 from detection.plate_detector import PlateDetector
+from detection.helmet_detector import HelmetDetector
 from ingestion.stream_manager import StreamManager
 from logger import inference_logger as logger
 from ocr.ocr_config import OCRConfig
@@ -73,13 +73,12 @@ def run_pipeline(
             output_dir /
             f"{source_name}_inference_{timestamp}.mp4"
         )
-
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
     tracker = Tracker()
     plate_detector = PlateDetector()
     ocr_engine = OCREngine()
-
+    helmet_detector = HelmetDetector()
     track_memory = TrackMemory(
         cooldown_frames=OCRConfig.OCR_COOLDOWN_FRAMES,
         expiry_frames=OCRConfig.TRACK_EXPIRY_FRAMES,
@@ -87,31 +86,61 @@ def run_pipeline(
     )
 
     writer = None
-
     processed_frames = 0
     saved_frames = 0
-
     latest_detections = []
-
     fps_display = 0.0
     prev_time = time.time()
 
     def process_track(frame, track_row, frame_index):
-        print("TRACK_ROW =", track_row)
-        raise SystemExit
+        # print("TRACK_ROW =", track_row)
+        # raise SystemExit
         track_id = track_row["track_id"]
         vehicle_box = track_row["bbox_xyxy"]
+        class_id = track_row["class_id"]
+
+        if class_id == 6:
+
+            helmet_class = (
+                helmet_detector.detect(
+                    vehicle_crop
+                )
+            )
+
+            if helmet_class == 1:
+
+                logger.info(
+                    f"NO HELMET: "
+                    f"Track {track_id}"
+                )
+
+                cv2.rectangle(
+                    frame,
+                    (x1, y1),
+                    (x2, y2),
+                    (0, 0, 255),
+                    3,
+                )
+
+                cv2.putText(
+                    frame,
+                    "NO HELMET",
+                    (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.8,
+                    (0, 0, 255),
+                    2,
+                )
 
         x1, y1, x2, y2 = vehicle_box
 
         if (x2 - x1) < 80 or (y2 - y1) < 40:
             return
-
+        
         entry = track_memory.register_track(
             track_id,
             frame_index,
         )
-
         if entry.ocr_result:
             draw_ocr_label(
                 frame,
@@ -119,13 +148,13 @@ def run_pipeline(
                 entry.ocr_result,
             )
             return
-
+        
         if not track_memory.should_run_ocr(
             track_id,
             frame_index,
         ):
             return
-
+        
         vehicle_crop = crop_frame_by_bbox(
             frame,
             vehicle_box,
@@ -146,16 +175,14 @@ def run_pipeline(
                 f"for track {track_id}: {exc}"
             )
             return
-
         best_plate = select_best_plate_detection(
             plate_detections
         )
-
         track_memory.mark_ocr_attempt(
             track_id,
             frame_index,
         )
-
+    
         if best_plate is None:
             return
 
@@ -174,8 +201,8 @@ def run_pipeline(
         
         h, w = plate_crop.shape[:2]
         if h < 25 or w < 60:
-            return            ## too small to be a plate, skip OCR
-        
+            return                                    ## too small to be a plate, skip OCR
+
         try:
             print(f"Running OCR for track {track_id}") # debugg 
             debug = vehicle_crop.copy()
@@ -210,7 +237,7 @@ def run_pipeline(
                 )
             )
             print("OCR RESULT:", ocr_text)
-            
+    
             if ocr_text and ocr_confidence > 0.2: 
                 db_result = mock_db.query_plate(ocr_text)
                 print("DB RESULT:", db_result)                                   ### db result 
@@ -288,14 +315,12 @@ def run_pipeline(
                 fourcc = cv2.VideoWriter_fourcc(
                     *"mp4v"
                 )
-
                 writer = cv2.VideoWriter(
                     str(output_file),
                     fourcc,
                     source_fps,
                     (width, height),
                 )
-
                 if not writer.isOpened():
                     logger.error(
                         f"Failed to create "
@@ -303,12 +328,10 @@ def run_pipeline(
                         f"{output_file}"
                     )
                     return
-
                 logger.info(
                     f"Saving output to "
                     f"{output_file}"
                 )
-
             frame_to_save = frame.copy()
 
             track_memory.expire_stale_tracks(
@@ -316,29 +339,24 @@ def run_pipeline(
             )
 
             if frame_index % DETECTION_INTERVAL == 0:
-
                 try:
                     raw_detections = (
                         detector.detect_vehicle(
                             frame
                         )
                     )
-
                     latest_detections = (
                         tracker.update(
                             raw_detections
                         )
                     )
-
                 except Exception as exc:
                     logger.warning(
                         f"Detection failed "
                         f"at frame "
                         f"{frame_index}: {exc}"
                     )
-
             if latest_detections:
-
                 for track_row in (
                     iter_supervision_detections(
                         latest_detections
@@ -349,7 +367,6 @@ def run_pipeline(
                         track_row,
                         frame_index,
                     )
-
             draw_detections(
                 frame_to_save,
                 latest_detections,

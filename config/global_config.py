@@ -24,6 +24,9 @@ class GlobalConfig:
     # Backward-compatible aliases for older references.
     Vehicle_MODEL_ONNX = VEHICLE_MODEL_ONNX
     Vehicle_MODEL_PT = VEHICLE_MODEL_PT
+
+    #Helmet Detection Model Path
+    HELMET_MODEL_ONNX = "detection/helmet_detection/helmet.onnx"
     
     # Clasd Names 
     CLASS_NAMES = ["animal", "autorickshaw", "bicycle", "bus", "car", "caravan", "motorcycle", "person", "rider", "traffic light", "traffic sign", "trailer", "train", "truck", "vehicle fallback"]
