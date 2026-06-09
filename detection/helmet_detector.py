@@ -1,12 +1,7 @@
-import onnxruntime as ort
+# import onnxruntime as ort
+# from config.global_config import GlobalConfig
 # import numpy as np
-
-MODEL_PATH = "detection/helmet_detection/helmet.onnx"  
-
-session = ort.InferenceSession(
-    MODEL_PATH,
-    providers=["CPUExecutionProvider"]
-)
+# from utils.global_utils import load_onnx_session
 
 # print("=== INPUTS ===")
 # for inp in session.get_inputs():
@@ -88,37 +83,218 @@ session = ort.InferenceSession(
 # (venv) mehrajalom0@penguin:~/trafisight$ 
 
 
+# img = cv2.imread("images.jpeg")
+# img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+# img_rgb = cv2.resize(img_rgb, (640, 640))
+# tensor = img_rgb.astype(np.float32) / 255.0
+# tensor = np.transpose(tensor, (2, 0, 1))
+# tensor = np.expand_dims(tensor, axis=0)
+# outputs = session.run(
+#     None,
+#     {
+#         session.get_inputs()[0].name: tensor
+#     }
+# )
+
+# preds = np.squeeze(outputs[0]).T
+
+# class_scores = preds[:, 4:]
+
+# best_idx = np.argmax(
+#     class_scores.max(axis=1)
+# )
+
+# best_pred = preds[best_idx]
+
+# print("BEST PREDICTION:")
+# print(best_pred)
+
+# print("CLASS ID:")
+# print(np.argmax(best_pred[4:]))
+
+# print("SCORES:")
+# print(best_pred[4:])
+
+from pathlib import Path
+
 import cv2
 import numpy as np
 
-img = cv2.imread("images.jpeg")
-img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-img_rgb = cv2.resize(img_rgb, (640, 640))
-tensor = img_rgb.astype(np.float32) / 255.0
-tensor = np.transpose(tensor, (2, 0, 1))
-tensor = np.expand_dims(tensor, axis=0)
-outputs = session.run(
-    None,
-    {
-        session.get_inputs()[0].name: tensor
-    }
-)
+from logger import inference_logger as logger
+from utils.global_utils import load_onnx_session
+from config.global_config import GlobalConfig
 
-preds = np.squeeze(outputs[0]).T
 
-class_scores = preds[:, 4:]
+class HelmetDetector:
 
-best_idx = np.argmax(
-    class_scores.max(axis=1)
-)
+    HELMET = 0
+    NO_HELMET = 1
+    BIKE = 2
 
-best_pred = preds[best_idx]
+    def __init__(
+        self,
+        model_path: str = GlobalConfig.HELMET_MODEL_ONNX,
+        conf_threshold: float = 0.50,
+    ) -> None:
 
-print("BEST PREDICTION:")
-print(best_pred)
+        self.model_path = model_path
+        self.conf_threshold = conf_threshold
 
-print("CLASS ID:")
-print(np.argmax(best_pred[4:]))
+        self.enabled = False
+        self.session = None
+        self.input_name = None
+        self.input_shape = None
 
-print("SCORES:")
-print(best_pred[4:])
+        try:
+
+            if not Path(model_path).exists():
+                logger.warning(
+                    f"Helmet model not found: {model_path}"
+                )
+                return
+            self.session = load_onnx_session(
+                model_path
+            )
+            self.input_name = (
+                self.session.get_inputs()[0].name
+            )
+            self.input_shape = (
+                self.session.get_inputs()[0].shape
+            )
+            self.enabled = True
+            logger.info(
+                f"Loaded helmet model: {model_path}"
+            )
+
+        except Exception as exc:
+            logger.warning(
+                f"Helmet detector disabled: {exc}"
+            )
+
+
+    def detect(self, frame):
+
+        if (
+            not self.enabled
+            or self.session is None
+            or self.input_shape is None
+        ):
+            return None
+
+        try:
+
+            input_tensor = (
+                self._preprocess_frame(frame)
+            )
+
+            outputs = self.session.run(
+                None,
+                {
+                    self.input_name:
+                    input_tensor
+                }
+            )
+
+            return self._postprocess(
+                outputs[0]
+            )
+
+        except Exception as exc:
+
+            logger.warning(
+                f"Helmet detection failed: {exc}"
+            )
+
+            return None
+
+    def _preprocess_frame(
+        self,
+        frame: np.ndarray,
+    ) -> np.ndarray:
+
+        height = (
+            self.input_shape[2]
+            if isinstance(
+                self.input_shape[2],
+                int
+            )
+            else 640
+        )
+
+        width = (
+            self.input_shape[3]
+            if isinstance(
+                self.input_shape[3],
+                int
+            )
+            else 640
+        )
+
+        image = cv2.cvtColor(
+            frame,
+            cv2.COLOR_BGR2RGB
+        )
+
+        image = cv2.resize(
+            image,
+            (width, height)
+        )
+
+        image = (
+            image.astype(np.float32)
+            / 255.0
+        )
+
+        image = np.transpose(
+            image,
+            (2, 0, 1)
+        )
+
+        image = np.expand_dims(
+            image,
+            axis=0
+        )
+
+        return image
+
+    def _postprocess(
+        self,
+        raw_output: np.ndarray,
+    ):
+
+        output = np.squeeze(
+            raw_output
+        )
+        if output.ndim != 2:
+            return None
+        predictions = output.T
+        best_class = None
+        best_score = 0.0
+        for pred in predictions:
+
+            scores = pred[4:]
+
+            class_id = int(
+                np.argmax(scores)
+            )
+
+            score = float(
+                scores[class_id]
+            )
+
+            if score < self.conf_threshold:
+                continue
+            if score > best_score:
+                best_score = score
+                best_class = class_id
+
+        if best_class is None:
+            return None
+        
+        logger.info(
+            f"Helmet class: "
+            f"{best_class}, "
+            f"score={best_score:.3f}"
+        )
+
+        return best_class
