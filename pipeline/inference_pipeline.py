@@ -22,11 +22,15 @@ from tracking.tracker import Tracker
 from tracking.tracker_memory import TrackMemory
 from pipeline.inference_utils import draw_ocr_label
 from mock_db.mock_db import MockDB
-
+from database.db_manager import ViolationDB
+from datetime import datetime
 
 mock_db = MockDB()
+violation_db = ViolationDB()
 
 DETECTION_INTERVAL = 4
+
+helmet_class = None
 
 
 def run_pipeline(
@@ -96,17 +100,26 @@ def run_pipeline(
         # print("TRACK_ROW =", track_row)
         # raise SystemExit
         track_id = track_row["track_id"]
+
         vehicle_box = track_row["bbox_xyxy"]
+        x1, y1, x2, y2 = vehicle_box
+
         class_id = track_row["class_id"]
 
-        if class_id == 6:
+        vehicle_crop = crop_frame_by_bbox(
+            frame,
+            vehicle_box,
+        )
 
+        if vehicle_crop is None:
+            return
+        
+        if class_id == 6:
             helmet_class = (
                 helmet_detector.detect(
                     vehicle_crop
                 )
             )
-
             if helmet_class == 1:
 
                 logger.info(
@@ -155,13 +168,7 @@ def run_pipeline(
         ):
             return
         
-        vehicle_crop = crop_frame_by_bbox(
-            frame,
-            vehicle_box,
-        )
-
-        if vehicle_crop is None:
-            return
+        
 
         try:
             plate_detections = (
@@ -237,21 +244,58 @@ def run_pipeline(
                 )
             )
             print("OCR RESULT:", ocr_text)
-    
+            if ocr_text:
+
+                count = violation_db.count_offences(
+                    ocr_text
+                )
+                
             if ocr_text and ocr_confidence > 0.2: 
                 db_result = mock_db.query_plate(ocr_text)
                 print("DB RESULT:", db_result)                                   ### db result 
-                
-            os.makedirs(
-                f"{GlobalConfig.LOCAL_DEBUG_PATH}/plates",
-                exist_ok=True,
-            )
+            
+            if (
+                class_id == 6
+                and helmet_class == 1
+                and ocr_text
+            ):
+   
 
-            cv2.imwrite(
-                f"{GlobalConfig.LOCAL_DEBUG_PATH}/plates/"
-                f"frame_{frame_index}_track_{track_id}.jpg",      ####### Debugging output
-                plate_crop,
-            )
+                evidence_path = (
+                    f"{GlobalConfig.LOCAL_DEBUG_PATH}/plates/"
+                    f"frame_{frame_index}_track_{track_id}.jpg"
+                )
+
+                violation_db.insert_violation(
+
+                    plate_number=ocr_text,
+
+                    violation_type="NO_HELMET",
+
+                    camera_id=GlobalConfig.CAMERA_ID,
+
+                    track_id=track_id,
+
+                    confidence=float(
+                        ocr_confidence
+                    ),
+
+                    timestamp=datetime.now().isoformat(),
+
+                    evidence_image=evidence_path
+                )
+
+
+            # os.makedirs(
+            #     f"{GlobalConfig.LOCAL_DEBUG_PATH}/plates",
+            #     exist_ok=True,
+            # )
+
+            # cv2.imwrite(
+            #     f"{GlobalConfig.LOCAL_DEBUG_PATH}/plates/"
+            #     f"frame_{frame_index}_track_{track_id}.jpg",      ####### Debugging output
+            #     plate_crop,
+            # )
         except Exception as exc:
             logger.warning(
                 f"OCR failed "

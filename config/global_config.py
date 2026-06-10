@@ -8,6 +8,11 @@ except ModuleNotFoundError:
     pass
 
 class GlobalConfig:
+
+    #Database 
+    DATABASE_PATH = "database/traffic.db"
+    CAMERA_ID = "CAM_01"
+    
     # Paths 
     WEIGHTS_DIR = Path("detection/training/vehicle_detection/weights")
     OUTPUT_PATH = Path("outputs") / "inference"
