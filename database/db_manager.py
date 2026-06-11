@@ -1,10 +1,8 @@
 import sqlite3
+from config.global_config import GlobalConfig
 class ViolationDB:
 
-    def __init__(
-        self,
-        db_path="database/traffic.db"
-    ):
+    def __init__(self,db_path=GlobalConfig.DATABASE_PATH):
         self.conn = sqlite3.connect(
             db_path,
             check_same_thread=False
@@ -33,26 +31,29 @@ class ViolationDB:
 
                 timestamp TEXT,
 
-                evidence_image TEXT
+                evidence_image TEXT,
+
+                human_review_status TEXT
+
+                reviewed_by TEXT
+
+                review_timestamp TEXT
+
+                status TEXT DEFAULT 'PENDING',
+
+                risk_score TEXT,
+
+                agent_score REAL,
+
+                reasoning TEXT
             )
             """
         )
-
         self.conn.commit()
 
 
 
-    def insert_violation(
-        self,
-        plate_number,
-        violation_type,
-        camera_id,
-        track_id,
-        confidence,
-        timestamp,
-        evidence_image
-    ):
-
+    def insert_violation(self,plate_number,violation_type,camera_id,track_id,confidence,timestamp,evidence_image):
         self.cursor.execute(
             """
             INSERT INTO violations (
@@ -78,15 +79,10 @@ class ViolationDB:
                 evidence_image
             )
         )
-
         self.conn.commit()
 
 
-
-    def count_offences(
-        self,
-        plate_number
-    ):
+    def count_offences(self,plate_number):
         self.cursor.execute(
             """
             SELECT COUNT(*)
@@ -98,7 +94,6 @@ class ViolationDB:
         return self.cursor.fetchone()[0]
     
 
-
     def get_all_violations(self):
         self.cursor.execute(
             """
@@ -108,3 +103,36 @@ class ViolationDB:
         )
 
         return self.cursor.fetchall()
+    
+
+    def get_pending_violations(self):
+        self.cursor.execute(
+            """
+            SELECT *
+            FROM violations
+            WHERE status='PENDING'
+            """
+        )
+        return self.cursor.fetchall()
+    
+
+    def update_agent_result(self,violation_id,decision,risk_score,agent_score,reasoning):
+        self.cursor.execute(
+            """
+            UPDATE violations
+            SET
+            status=?,
+            risk_score=?,
+            agent_score=?,
+            reasoning=?
+            WHERE id=?
+            """,
+            (
+                decision,
+                risk_score,
+                agent_score,
+                reasoning,
+                violation_id
+            )
+        )
+        self.conn.commit()

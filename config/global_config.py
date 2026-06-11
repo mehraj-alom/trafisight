@@ -37,4 +37,7 @@ class GlobalConfig:
     CLASS_NAMES = ["animal", "autorickshaw", "bicycle", "bus", "car", "caravan", "motorcycle", "person", "rider", "traffic light", "traffic sign", "trailer", "train", "truck", "vehicle fallback"]
     CLASS_TO_ID = {name: idx for idx, name in enumerate(CLASS_NAMES)}
     
+
+# alias
+GLOBAL_CONFIG = GlobalConfig
     

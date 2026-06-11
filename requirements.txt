@@ -8,3 +8,6 @@ torch
 torchvision[cpu]
 supervision
 easyocr
+langgraph
+fastapi
+uvicorn
